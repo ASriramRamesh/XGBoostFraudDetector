@@ -12,14 +12,16 @@ from sklearn.impute import SimpleImputer
 import plotly.express as px
 import plotly.figure_factory as ff
 import os
-import joblib  # For saving and loading models
+import joblib # For saving and loading models and preprocessors
 
 # --- Global Constants ---
 RANDOM_STATE = 42
 N_ITER = 10 # Number of random search iterations
 CV_FOLDS = 5 # Cross-validation folds
 MODEL_FOLDER = "models"
-MODEL_FILE = "trained_model.pkl" # Model File Path
+MODEL_FILE = "trained_model.pkl"
+PREPROCESSOR_FOLDER = "preprocessors"
+PREPROCESSOR_FILE = "preprocessor.pkl"
 
 # --- Database Connection (Placeholder) ---
 # In a real-world scenario, replace with your actual database connection logic.
@@ -96,7 +98,7 @@ def preprocess_data(df):
     return X_processed, y, preprocessor  #Return the preprocessor in order to use in the inference section
 
 # --- Model Training ---
-def train_model(X_processed, y):
+def train_model(X_processed, y, preprocessor):
     """Trains an XGBoost model with hyperparameter tuning using RandomizedSearchCV."""
     X_train, X_test, y_train, y_test = train_test_split(X_processed, y, test_size=0.2, stratify=y, random_state=RANDOM_STATE)
 
@@ -137,6 +139,13 @@ def train_model(X_processed, y):
 
     model_path = os.path.join(MODEL_FOLDER, MODEL_FILE)
     joblib.dump(best_model, model_path) # Save the model and the preprocessor to the same folder
+    
+    # --- Save the preprocessor to the preprocessors folder ---
+    if not os.path.exists(PREPROCESSOR_FOLDER):
+        os.makedirs(PREPROCESSOR_FOLDER)
+
+    preprocessor_path = os.path.join(PREPROCESSOR_FOLDER, PREPROCESSOR_FILE)
+    joblib.dump(preprocessor, preprocessor_path)
     
     return best_model, X_test, y_test
 
@@ -185,7 +194,7 @@ def main():
        
         st.header("Data Preprocessing")
         df, _, _, _, _, _, _, _, _, _ = load_and_explore_data()
-        X_processed, y, _ = preprocess_data(df)
+        X_processed, y, preprocessor = preprocess_data(df)
         st.success("Data preprocessing completed!")
         st.write("Data Shape after Preprocessing:", X_processed.shape)
         
@@ -194,11 +203,11 @@ def main():
         st.header("Model Training and Evaluation")
         
         df, _, _, _, _, _, _, _, _, _ = load_and_explore_data()
-        X_processed, y, _ = preprocess_data(df)
+        X_processed, y, preprocessor = preprocess_data(df)
 
         if st.button("Train Model"):
             with st.spinner('Training model...'):
-                model, X_test, y_test = train_model(X_processed, y)
+                model, X_test, y_test = train_model(X_processed, y, preprocessor)
                 accuracy, precision, recall, f1, conf_matrix = evaluate_model(model, X_test, y_test)
 
                 st.success("Model training completed!")
@@ -213,58 +222,76 @@ def main():
 
     elif phase == "Make Predictions":
         st.header("Make Predictions")
-
+        
         df, _, _, _, _, _, _, _, _, _ = load_and_explore_data()
-        X_processed, y, preprocessor = preprocess_data(df)
+        _, _, preprocessor = preprocess_data(df)
 
-        # Define model path
+        # Define model and preprocessor paths
         model_path = os.path.join(MODEL_FOLDER, MODEL_FILE)
+        preprocessor_path = os.path.join(PREPROCESSOR_FOLDER, PREPROCESSOR_FILE)
 
-        # Check if saved model exists, and load it if present
-        if os.path.exists(model_path):
-            with st.spinner('Loading saved model...'):
+
+        # Check if saved model and preprocessor exist, and load them if present
+        if os.path.exists(model_path) and os.path.exists(preprocessor_path):
+             with st.spinner('Loading saved model and preprocessor...'):
                 model = joblib.load(model_path)
-                st.success("Saved model loaded successfully!")
+                preprocessor = joblib.load(preprocessor_path)
+                st.success("Saved model and preprocessor loaded successfully!")
         else:
-             # Train the model if not already in session state
-             with st.spinner('Training model...'):
-                 model, X_test, y_test = train_model(X_processed, y)
-             st.success("Model trained for the Prediction phase")
+            # Train the model if not already in session state
+            with st.spinner('Training model...'):
+                 X_processed, y, preprocessor = preprocess_data(df)
+                 model, X_test, y_test = train_model(X_processed, y, preprocessor)
 
-        # Input fields
-        st.subheader("Enter transaction details for prediction:")
-        input_data = {}
+            st.success("Model trained for the Prediction phase")
 
-        # Select the transaction type
-        transaction_type = st.selectbox("Select Transaction Type", options=df['type'].unique())
-        input_data['type'] = transaction_type
 
-        # Input fields for numerical columns
-        for col in ['amount', 'oldbalanceOrg', 'newbalanceOrig', 'oldbalanceDest', 'newbalanceDest']:
-            input_data[col] = st.number_input(f"Enter {col}", value=0.0)
+        # Upload CSV file
+        uploaded_file = st.file_uploader("Upload a CSV file for predictions", type=["csv"])
 
-        if st.button("Predict"):
-           # Create a DataFrame from user inputs with correct column order and original df columns
-            input_df = pd.DataFrame([input_data], columns=['type','amount', 'oldbalanceOrg', 'newbalanceOrig', 'oldbalanceDest', 'newbalanceDest'])
+        if uploaded_file is not None:
+            try:
+                input_df = pd.read_csv(uploaded_file)
 
-            # Feature engineering same as in training
-            input_df['balanceDiffOrg'] = input_df['oldbalanceOrg'] - input_df['newbalanceOrig']
-            input_df['balanceDiffDest'] = input_df['oldbalanceDest'] - input_df['newbalanceDest']
-            input_df['amountRatioOrg'] = input_df['amount'] / (input_df['oldbalanceOrg'] + 1e-8)
-            input_df['amountRatioDest'] = input_df['amount'] / (input_df['oldbalanceDest'] + 1e-8)
+                 # Check if 'isFraud' column exists
+                if 'isFraud' not in input_df.columns:
+                    st.error("The CSV file must contain an 'isFraud' column.")
+                    return
 
-           
-            # Preprocess the data
-            X_input_processed = preprocessor.transform(input_df)
+                # Get target column from input_df and remove it from input features before pre-processing
+                y_true = input_df['isFraud']
+                input_df_features = input_df.drop(columns=['isFraud'])
 
-            # Make Prediction
-            prediction = model.predict(X_input_processed)
-            
-            st.subheader("Prediction Result")
-            if prediction[0] == 1:
-                st.error("Fraudulent Transaction Detected!")
-            else:
-                st.success("Legitimate Transaction Detected.")
+
+                # Feature engineering same as training
+                input_df_features['balanceDiffOrg'] = input_df_features['oldbalanceOrg'] - input_df_features['newbalanceOrig']
+                input_df_features['balanceDiffDest'] = input_df_features['oldbalanceDest'] - input_df_features['newbalanceDest']
+                input_df_features['amountRatioOrg'] = input_df_features['amount'] / (input_df_features['oldbalanceOrg'] + 1e-8)
+                input_df_features['amountRatioDest'] = input_df_features['amount'] / (input_df_features['oldbalanceDest'] + 1e-8)
+
+                # Preprocess data and predict
+                X_input_processed = preprocessor.transform(input_df_features)
+                y_pred = model.predict(X_input_processed)
+
+                # Evaluate model performance
+                accuracy = accuracy_score(y_true, y_pred)
+                precision = precision_score(y_true, y_pred)
+                recall = recall_score(y_true, y_pred)
+                f1 = f1_score(y_true, y_pred)
+                conf_matrix = confusion_matrix(y_true, y_pred)
+
+                 # Display Results
+                st.subheader("Model Evaluation Metrics")
+                st.write(f"Accuracy: {accuracy:.4f}")
+                st.write(f"Precision: {precision:.4f}")
+                st.write(f"Recall: {recall:.4f}")
+                st.write(f"F1 Score: {f1:.4f}")
+                st.subheader("Confusion Matrix")
+                st.dataframe(conf_matrix)
+
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+
 
 if __name__ == "__main__":
     main()
