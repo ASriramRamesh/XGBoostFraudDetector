@@ -1,0 +1,64 @@
+# Data files
+*.csv
+*.tsv
+*.parquet
+*.json
+*.xlsx
+*.h5
+
+# Model files
+*.pkl
+*.joblib
+*.hdf5
+*.model
+*.bin
+
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+env/
+venv/
+.venv/
+
+# Config and secrets
+*.env
+secrets.json
+
+# Logs
+*.log
+*.out
+*.err
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Cache and temporary files
+.cache/
+*.tmp
+*.bak
+*.swp
+*.swo
+*.DS_Store
+
+# Test coverage reports
+.coverage
+coverage.xml
+htmlcov/
+
+# Distribution files
+dist/
+build/
+*.egg-info/
+
+# Python Package Index artifacts
+*.egg
+*.whl
+
+# Static analysis tools
+.mypy_cache/
+.pytest_cache/
+.tox/
