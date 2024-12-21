@@ -11,13 +11,15 @@ from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 import plotly.express as px
 import plotly.figure_factory as ff
-import matplotlib.pyplot as plt
-import seaborn as sns
+import os
+import joblib  # For saving and loading models
 
 # --- Global Constants ---
 RANDOM_STATE = 42
 N_ITER = 10 # Number of random search iterations
 CV_FOLDS = 5 # Cross-validation folds
+MODEL_FOLDER = "models"
+MODEL_FILE = "trained_model.pkl" # Model File Path
 
 # --- Database Connection (Placeholder) ---
 # In a real-world scenario, replace with your actual database connection logic.
@@ -26,21 +28,9 @@ def fetch_data_from_db():
     Placeholder for fetching data from a database.
     Returns a sample dataset.
     """
-    data = """step,type,amount,nameOrig,oldbalanceOrg,newbalanceOrig,nameDest,oldbalanceDest,newbalanceDest,isFraud,isFlaggedFraud
-283,CASH_IN,210329.84,C1159819632,3778062.79,3988392.64,C1218876138,1519266.6,1308936.76,0,0
-132,CASH_OUT,215489.19,C1372369468,21518.0,0.0,C467105520,6345756.55,6794954.89,0,0
-355,DEBIT,4431.05,C1059822709,20674.0,16242.95,C76588246,80876.56,85307.61,0,0
-135,CASH_OUT,214026.2,C1464960643,46909.73,0.0,C1059379810,13467450.36,13681476.56,0,0
-33,TRANSFER,535384.37,C1195440050,49783.0,0.0,C929909070,3933400.35,4468784.72,0,0
-373,CASH_IN,17584.7,C1041108405,3159.0,19743.7,C1000256042,314692.29,297107.58,0,0
-258,CASH_OUT,28101.66,C1477881534,0.0,0.0,C1638161161,1216149.99,1244251.65,0,0
-352,CASH_IN,300124.81,C1210845813,55789.0,355913.81,C1553815217,625674.8,325549.99,0,0
-43,CASH_IN,10380.54,C927829518,16773.0,27153.54,C1701425729,119106.92,108726.38,0,0
-377,CASH_OUT,427243.45,C1726043234,127013.0,0.0,C1828157242,2943165.43,3370408.88,0,0
-    """
-    
-    from io import StringIO
-    df = pd.read_csv(StringIO(data))
+    file_path = "data/fraud_detect.csv"
+
+    df = pd.read_csv(file_path)
     return df
 
 # --- Data Loading and EDA ---
@@ -140,6 +130,13 @@ def train_model(X_processed, y):
 
     # Get the best model
     best_model = random_search.best_estimator_
+
+    # --- Save the model to the models folder ---
+    if not os.path.exists(MODEL_FOLDER):
+         os.makedirs(MODEL_FOLDER)
+
+    model_path = os.path.join(MODEL_FOLDER, MODEL_FILE)
+    joblib.dump(best_model, model_path) # Save the model and the preprocessor to the same folder
     
     return best_model, X_test, y_test
 
@@ -220,14 +217,19 @@ def main():
         df, _, _, _, _, _, _, _, _, _ = load_and_explore_data()
         X_processed, y, preprocessor = preprocess_data(df)
 
-        if 'model' not in st.session_state:
+        # Define model path
+        model_path = os.path.join(MODEL_FOLDER, MODEL_FILE)
+
+        # Check if saved model exists, and load it if present
+        if os.path.exists(model_path):
+            with st.spinner('Loading saved model...'):
+                model = joblib.load(model_path)
+                st.success("Saved model loaded successfully!")
+        else:
              # Train the model if not already in session state
              with st.spinner('Training model...'):
                  model, X_test, y_test = train_model(X_processed, y)
-                 st.session_state['model'] = model
              st.success("Model trained for the Prediction phase")
-        else:
-            model= st.session_state['model']
 
         # Input fields
         st.subheader("Enter transaction details for prediction:")

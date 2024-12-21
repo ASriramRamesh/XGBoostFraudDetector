@@ -24,6 +24,8 @@ env/
 venv/
 .venv/
 /venv_fraud_detection/
+/data/
+/models/
 
 # Config and secrets
 *.env
