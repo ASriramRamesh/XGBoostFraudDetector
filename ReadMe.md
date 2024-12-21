@@ -1,0 +1,2 @@
+Activate virtual environment
+venv_fraud_detection\Scripts\activate
