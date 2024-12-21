@@ -33,9 +33,6 @@ secrets.json
 *.out
 *.err
 
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints/
-
 # Cache and temporary files
 .cache/
 *.tmp
