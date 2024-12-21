@@ -30,7 +30,7 @@ def fetch_data_from_db():
     Placeholder for fetching data from a database.
     Returns a sample dataset.
     """
-    file_path = "data/fraud_detect.csv"
+    file_path = "data/test_train.csv"
 
     df = pd.read_csv(file_path)
     return df
