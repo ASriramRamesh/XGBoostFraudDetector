@@ -23,6 +23,7 @@ __pycache__/
 env/
 venv/
 .venv/
+/venv_fraud_detection/
 
 # Config and secrets
 *.env
