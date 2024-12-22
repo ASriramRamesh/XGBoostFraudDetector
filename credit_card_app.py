@@ -45,7 +45,7 @@ def load_and_explore_data():
     # Data Summary
     summary_stats = df.describe()
     missing_values = df.isnull().sum()
-    
+
     # Target Variable Analysis
     fraud_count = df['isFraud'].value_counts()
     fraud_percentage = df['isFraud'].value_counts(normalize=True) * 100
@@ -55,43 +55,80 @@ def load_and_explore_data():
     box_amount_fraud = px.box(df, x="isFraud", y="amount", title="Amount Distribution by Fraud")
     bar_type = px.bar(df, x="type", title="Transaction Type Frequency")
     scatter_amount_balance = px.scatter(df, x="oldbalanceOrg", y="amount", color="isFraud", title="Amount vs. Old Balance")
+
     correlation_matrix = df.select_dtypes(include=np.number).corr()
-    
     heatmap_fig = ff.create_annotated_heatmap(z=correlation_matrix.values,
                                               x=list(correlation_matrix.columns),
                                               y=list(correlation_matrix.index),
                                               colorscale='Viridis',
+                                              )
+
+    # --- Additional Visualizations ---
+    df['step_days'] = df['step'] / 24
+    df['step_weeks'] = df['step'] / (24 * 7)
+
+    hist_step_days = px.histogram(df, x="step_days", title="Distribution of Step Days")
+    hist_step_weeks = px.histogram(df, x="step_weeks", title="Distribution of Step Weeks")
+    box_step_days_fraud = px.box(df, x="isFraud", y="step_days", title="Step Days Distribution by Fraud")
+    box_step_weeks_fraud = px.box(df, x="isFraud", y="step_weeks", title="Step Weeks Distribution by Fraud")
+
+    df['name_orig_initial'] = df['nameOrig'].str[0]
+    df['name_dest_initial'] = df['nameDest'].str[0]
+
+    bar_name_orig = px.bar(df, x="name_orig_initial", title="Frequency of Name Orig Initial")
+    bar_name_dest = px.bar(df, x="name_dest_initial", title="Frequency of Name Dest Initial")
+
+    bar_name_orig_fraud = px.bar(df, x="name_orig_initial", color="isFraud", title="Name Orig Initial by Fraud")
+    bar_name_dest_fraud = px.bar(df, x="name_dest_initial", color="isFraud", title="Name Dest Initial by Fraud")
+
+    cat_corr = df.select_dtypes(include='object').apply(lambda x: x.astype('category').cat.codes)
+    cat_corr['isFraud'] = df['isFraud']
+    cat_corr_matrix = cat_corr.corr()
+    cat_corr_heatmap_fig = ff.create_annotated_heatmap(z=cat_corr_matrix.values,
+                                              x=list(cat_corr_matrix.columns),
+                                              y=list(cat_corr_matrix.index),
+                                              colorscale='Viridis',
                                              )
 
-    return df, summary_stats, missing_values, fraud_count, fraud_percentage, hist_amount, box_amount_fraud, bar_type, scatter_amount_balance, heatmap_fig
+
+    return df, summary_stats, missing_values, fraud_count, fraud_percentage, hist_amount, box_amount_fraud, bar_type, scatter_amount_balance, heatmap_fig, \
+           hist_step_days, hist_step_weeks, box_step_days_fraud, box_step_weeks_fraud, \
+           bar_name_orig, bar_name_dest, bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig
+
 
 # --- Data Preprocessing ---
 def preprocess_data(df):
     """Preprocesses the data using a pipeline."""
-    
+
     # Define numerical and categorical features
-    numerical_features = ['amount','balanceDiffOrg', 'balanceDiffDest', 'amountRatioOrg', 'amountRatioDest']
-    categorical_features = ['type']
+    numerical_features = ['amount', 'balanceDiffOrg', 'balanceDiffDest', 'amountRatioOrg', 'amountRatioDest',
+                          'step_days', 'step_weeks']
+    categorical_features = ['type', 'name_orig_initial', 'name_dest_initial']
 
     # Feature Engineering
     df['balanceDiffOrg'] = df['oldbalanceOrg'] - df['newbalanceOrig']
     df['balanceDiffDest'] = df['oldbalanceDest'] - df['newbalanceDest']
     df['amountRatioOrg'] = df['amount'] / (df['oldbalanceOrg'] + 1e-8)
     df['amountRatioDest'] = df['amount'] / (df['oldbalanceDest'] + 1e-8)
+    df['step_days'] = df['step'] / 24
+    df['step_weeks'] = df['step'] / (24 * 7)
+
+    df['name_orig_initial'] = df['nameOrig'].str[0].fillna('N/A')
+    df['name_dest_initial'] = df['nameDest'].str[0].fillna('N/A')
+
 
     # --- Remove Outliers ---
-    for col in ['amount', 'balanceDiffOrg', 'balanceDiffDest','amountRatioOrg','amountRatioDest']:
-          lower_quantile = df[col].quantile(OUTLIER_THRESHOLD)
-          upper_quantile = df[col].quantile(1 - OUTLIER_THRESHOLD)
-          df[col] = np.clip(df[col], lower_quantile, upper_quantile)
-    
-    # --- Drop redundant Features ---
-    df = df.drop(columns=['oldbalanceOrg','newbalanceOrig', 'oldbalanceDest','newbalanceDest','isFlaggedFraud'])
+    for col in ['amount', 'balanceDiffOrg', 'balanceDiffDest', 'amountRatioOrg', 'amountRatioDest']:
+        lower_quantile = df[col].quantile(OUTLIER_THRESHOLD)
+        upper_quantile = df[col].quantile(1 - OUTLIER_THRESHOLD)
+        df[col] = np.clip(df[col], lower_quantile, upper_quantile)
 
+    # --- Drop redundant Features ---
+    df = df.drop(columns=['oldbalanceOrg', 'newbalanceOrig', 'oldbalanceDest', 'newbalanceDest', 'isFlaggedFraud','step','nameOrig','nameDest'])
 
     numeric_transformer = Pipeline(steps=[
         ('imputer', SimpleImputer(strategy='median')),
-         ('scaler', QuantileTransformer(output_distribution='normal'))
+        ('scaler', QuantileTransformer(output_distribution='normal'))
     ])
 
     categorical_transformer = Pipeline(steps=[
@@ -103,12 +140,12 @@ def preprocess_data(df):
             ('num', numeric_transformer, numerical_features),
             ('cat', categorical_transformer, categorical_features)
         ])
-    
-    X = df.drop(columns=['isFraud', 'nameOrig', 'nameDest'])
+
+    X = df.drop(columns=['isFraud'])
     y = df['isFraud']
-    
+
     X_processed = preprocessor.fit_transform(X)
-    return X_processed, y, preprocessor  #Return the preprocessor in order to use in the inference section
+    return X_processed, y, preprocessor  # Return the preprocessor in order to use in the inference section
 
 # --- Model Training ---
 def train_model(X_processed, y, preprocessor):
@@ -188,7 +225,10 @@ def main():
 
     if phase == "Data Exploration":
         st.header("Data Exploration")
-        df, summary_stats, missing_values, fraud_count, fraud_percentage, hist_amount, box_amount_fraud, bar_type, scatter_amount_balance, heatmap_fig = load_and_explore_data()
+        df, summary_stats, missing_values, fraud_count, fraud_percentage, hist_amount, box_amount_fraud, bar_type, scatter_amount_balance, heatmap_fig, \
+         hist_step_days, hist_step_weeks, box_step_days_fraud, box_step_weeks_fraud, \
+         bar_name_orig, bar_name_dest, bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig = load_and_explore_data()
+
         st.subheader("Data Summary")
         st.dataframe(summary_stats)
         st.subheader("Missing Values")
@@ -202,6 +242,21 @@ def main():
         st.plotly_chart(bar_type)
         st.plotly_chart(scatter_amount_balance)
         st.plotly_chart(heatmap_fig)
+
+        st.subheader("Additional Visualizations - Time Features")
+        st.plotly_chart(hist_step_days)
+        st.plotly_chart(hist_step_weeks)
+        st.plotly_chart(box_step_days_fraud)
+        st.plotly_chart(box_step_weeks_fraud)
+
+        st.subheader("Additional Visualizations - Name Initial Features")
+        st.plotly_chart(bar_name_orig)
+        st.plotly_chart(bar_name_dest)
+        st.plotly_chart(bar_name_orig_fraud)
+        st.plotly_chart(bar_name_dest_fraud)
+        st.subheader("Additional Visualizations - Categorical Features Correlation")
+        st.plotly_chart(cat_corr_heatmap_fig)
+
 
     elif phase == "Data Preprocessing":
 
@@ -220,10 +275,15 @@ def main():
         if st.button("Train Model"):
             with st.spinner('Training model...'):
                 model, X_test, y_test = train_model(X_processed, y, preprocessor)
+
+                # Feature Importance
+                feature_importance = pd.Series(model.feature_importances_, index = preprocessor.get_feature_names_out()).sort_values(ascending = False)
+                fig = px.bar(x = feature_importance.index, y = feature_importance, title = 'Feature Importance')
+                st.plotly_chart(fig)
+
+
                 accuracy, precision, recall, f1, conf_matrix = evaluate_model(model, X_test, y_test)
-
                 st.success("Model training completed!")
-
                 st.subheader("Model Evaluation Metrics")
                 st.write(f"Accuracy: {accuracy:.4f}")
                 st.write(f"Precision: {precision:.4f}")
@@ -270,13 +330,21 @@ def main():
 
                 # Get target column from input_df and remove it from input features before pre-processing
                 y_true = input_df['isFraud']
-                input_df_features = input_df.drop(columns=['isFraud'])
+                input_df_features = input_df.drop(columns=['isFraud','nameOrig', 'nameDest','step'])
 
                 # Feature engineering same as training
                 input_df_features['balanceDiffOrg'] = input_df_features['oldbalanceOrg'] - input_df_features['newbalanceOrig']
                 input_df_features['balanceDiffDest'] = input_df_features['oldbalanceDest'] - input_df_features['newbalanceDest']
                 input_df_features['amountRatioOrg'] = input_df_features['amount'] / (input_df_features['oldbalanceOrg'] + 1e-8)
                 input_df_features['amountRatioDest'] = input_df_features['amount'] / (input_df_features['oldbalanceDest'] + 1e-8)
+                input_df_features['step_days'] = input_df_features['step'] / 24
+                input_df_features['step_weeks'] = input_df_features['step'] / (24 * 7)
+
+                input_df_features['name_orig_initial'] = input_df_features['nameOrig'].str[0].fillna('N/A')
+                input_df_features['name_dest_initial'] = input_df_features['nameDest'].str[0].fillna('N/A')
+
+                # Drop redundant columns
+                input_df_features = input_df_features.drop(columns=['oldbalanceOrg', 'newbalanceOrig', 'oldbalanceDest', 'newbalanceDest'])
 
                 # Preprocess data and predict
                 X_input_processed = preprocessor.transform(input_df_features)
@@ -300,6 +368,7 @@ def main():
 
             except Exception as e:
                 st.error(f"An error occurred: {e}")
+
 
 if __name__ == "__main__":
     main()
