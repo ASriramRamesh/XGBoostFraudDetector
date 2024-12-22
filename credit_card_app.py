@@ -183,7 +183,7 @@ def train_model(X_processed, y, preprocessor):
     #     random_state=RANDOM_STATE,
     #     enable_categorical=False,
     #     use_label_encoder=False
-    # )    
+    # )
 
     # Create custom StratifiedKFold object
     cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
@@ -214,7 +214,7 @@ def train_model(X_processed, y, preprocessor):
 
     model_path = os.path.join(MODEL_FOLDER, MODEL_FILE)
     preprocessor_path = os.path.join(PREPROCESSOR_FOLDER, PREPROCESSOR_FILE)
-    
+
     joblib.dump(best_model, model_path)
     joblib.dump(preprocessor, preprocessor_path)
 
@@ -292,7 +292,7 @@ def main():
         categorical_column_names = list(cat_corr_matrix.columns)
         categorical_row_names = list(cat_corr_matrix.index)
 
-        # Create annotations 
+        # Create annotations
         annotations_cat_text = np.empty_like(categorical_correlation_values, dtype=str)
         for i, row in enumerate(categorical_correlation_values):
             for j, val in enumerate(row):
@@ -317,7 +317,7 @@ def main():
         numerical_column_names = list(correlation_matrix.columns)
         numerical_row_names = list(correlation_matrix.index)
 
-        # Create annotations 
+        # Create annotations
         annotations_num_text = np.empty_like(numerical_correlation_values, dtype=str)
         for i, row in enumerate(numerical_correlation_values):
             for j, val in enumerate(row):
@@ -406,7 +406,7 @@ def main():
 
                 # Get target column from input_df and remove it from input features before pre-processing
                 y_true = input_df['isFraud']
-                input_df_features = input_df.drop(columns=['isFraud','nameOrig', 'nameDest','step'])
+                input_df_features = input_df.drop(columns=['isFraud'])
 
                 # Feature engineering same as training
                 input_df_features['balanceDiffOrg'] = input_df_features['oldbalanceOrg'] - input_df_features['newbalanceOrig']
@@ -420,7 +420,7 @@ def main():
                 input_df_features['name_dest_initial'] = input_df_features['nameDest'].str[0].fillna('N/A')
 
                 # Drop redundant columns
-                input_df_features = input_df_features.drop(columns=['oldbalanceOrg', 'newbalanceOrig', 'oldbalanceDest', 'newbalanceDest'])
+                input_df_features = input_df_features.drop(columns=['oldbalanceOrg', 'newbalanceOrig', 'oldbalanceDest', 'newbalanceDest','step','nameOrig','nameDest','isFlaggedFraud'])
 
                 # Preprocess data and predict
                 X_input_processed = preprocessor.transform(input_df_features)
