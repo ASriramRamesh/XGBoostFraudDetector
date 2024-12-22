@@ -50,34 +50,21 @@ def load_and_explore_data():
     fraud_count = df['isFraud'].value_counts()
     fraud_percentage = df['isFraud'].value_counts(normalize=True) * 100
 
-    # Visualizations (using Plotly for interactive plots)
+    # --- Visualizations - Section 1 ---
     hist_amount = px.histogram(df, x="amount", title="Transaction Amount Distribution")
     box_amount_fraud = px.box(df, x="isFraud", y="amount", title="Amount Distribution by Fraud")
     bar_type = px.bar(df, x="type", title="Transaction Type Frequency")
-    scatter_amount_balance = px.scatter(df, x="oldbalanceOrg", y="amount", color="isFraud", title="Amount vs. Old Balance")
 
-    correlation_matrix = df.select_dtypes(include=np.number).corr()
-    heatmap_fig = ff.create_annotated_heatmap(z=correlation_matrix.values,
-                                              x=list(correlation_matrix.columns),
-                                              y=list(correlation_matrix.index),
-                                              colorscale='Viridis',
-                                              )
-
-    # --- Additional Visualizations ---
+    # --- Visualizations - Section 2 ---
     df['step_days'] = df['step'] / 24
     df['step_weeks'] = df['step'] / (24 * 7)
-
-    hist_step_days = px.histogram(df, x="step_days", title="Distribution of Step Days")
-    hist_step_weeks = px.histogram(df, x="step_weeks", title="Distribution of Step Weeks")
     box_step_days_fraud = px.box(df, x="isFraud", y="step_days", title="Step Days Distribution by Fraud")
     box_step_weeks_fraud = px.box(df, x="isFraud", y="step_weeks", title="Step Weeks Distribution by Fraud")
 
+
+    # --- Visualizations - Section 3 ---
     df['name_orig_initial'] = df['nameOrig'].str[0]
     df['name_dest_initial'] = df['nameDest'].str[0]
-
-    bar_name_orig = px.bar(df, x="name_orig_initial", title="Frequency of Name Orig Initial")
-    bar_name_dest = px.bar(df, x="name_dest_initial", title="Frequency of Name Dest Initial")
-
     bar_name_orig_fraud = px.bar(df, x="name_orig_initial", color="isFraud", title="Name Orig Initial by Fraud")
     bar_name_dest_fraud = px.bar(df, x="name_dest_initial", color="isFraud", title="Name Dest Initial by Fraud")
 
@@ -90,11 +77,17 @@ def load_and_explore_data():
                                               colorscale='Viridis',
                                              )
 
+    correlation_matrix = df.select_dtypes(include=np.number).corr()
+    heatmap_fig = ff.create_annotated_heatmap(z=correlation_matrix.values,
+                                              x=list(correlation_matrix.columns),
+                                              y=list(correlation_matrix.index),
+                                              colorscale='Viridis',
+                                              )
 
-    return df, summary_stats, missing_values, fraud_count, fraud_percentage, hist_amount, box_amount_fraud, bar_type, scatter_amount_balance, heatmap_fig, \
-           hist_step_days, hist_step_weeks, box_step_days_fraud, box_step_weeks_fraud, \
-           bar_name_orig, bar_name_dest, bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig
-
+    return df, summary_stats, missing_values, fraud_count, fraud_percentage, \
+        hist_amount, box_amount_fraud, bar_type, \
+        box_step_days_fraud, box_step_weeks_fraud, \
+        bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig, heatmap_fig
 
 # --- Data Preprocessing ---
 def preprocess_data(df):
@@ -225,9 +218,10 @@ def main():
 
     if phase == "Data Exploration":
         st.header("Data Exploration")
-        df, summary_stats, missing_values, fraud_count, fraud_percentage, hist_amount, box_amount_fraud, bar_type, scatter_amount_balance, heatmap_fig, \
-         hist_step_days, hist_step_weeks, box_step_days_fraud, box_step_weeks_fraud, \
-         bar_name_orig, bar_name_dest, bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig = load_and_explore_data()
+        df, summary_stats, missing_values, fraud_count, fraud_percentage, \
+         hist_amount, box_amount_fraud, bar_type, \
+         box_step_days_fraud, box_step_weeks_fraud, \
+         bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig, heatmap_fig = load_and_explore_data()
 
         st.subheader("Data Summary")
         st.dataframe(summary_stats)
@@ -236,26 +230,24 @@ def main():
         st.subheader("Target Variable Analysis")
         st.write(f"Fraud Count:\n{fraud_count}")
         st.write(f"Fraud Percentage:\n{fraud_percentage}")
-        st.subheader("Visualizations")
+
+        # --- Section 1 ---
+        st.subheader("Visualizations - Transaction Data")
         st.plotly_chart(hist_amount)
         st.plotly_chart(box_amount_fraud)
         st.plotly_chart(bar_type)
-        st.plotly_chart(scatter_amount_balance)
-        st.plotly_chart(heatmap_fig)
 
-        st.subheader("Additional Visualizations - Time Features")
-        st.plotly_chart(hist_step_days)
-        st.plotly_chart(hist_step_weeks)
+        # --- Section 2 ---
+        st.subheader("Visualizations - Time Features")
         st.plotly_chart(box_step_days_fraud)
         st.plotly_chart(box_step_weeks_fraud)
 
-        st.subheader("Additional Visualizations - Name Initial Features")
-        st.plotly_chart(bar_name_orig)
-        st.plotly_chart(bar_name_dest)
+        # --- Section 3 ---
+        st.subheader("Visualizations - Name Initial and Categorical Correlations")
         st.plotly_chart(bar_name_orig_fraud)
         st.plotly_chart(bar_name_dest_fraud)
-        st.subheader("Additional Visualizations - Categorical Features Correlation")
         st.plotly_chart(cat_corr_heatmap_fig)
+        st.plotly_chart(heatmap_fig)
 
 
     elif phase == "Data Preprocessing":
@@ -280,7 +272,6 @@ def main():
                 feature_importance = pd.Series(model.feature_importances_, index = preprocessor.get_feature_names_out()).sort_values(ascending = False)
                 fig = px.bar(x = feature_importance.index, y = feature_importance, title = 'Feature Importance')
                 st.plotly_chart(fig)
-
 
                 accuracy, precision, recall, f1, conf_matrix = evaluate_model(model, X_test, y_test)
                 st.success("Model training completed!")
