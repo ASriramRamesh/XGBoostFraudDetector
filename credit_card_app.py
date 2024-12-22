@@ -61,7 +61,6 @@ def load_and_explore_data():
     box_step_days_fraud = px.box(df, x="isFraud", y="step_days", title="Step Days Distribution by Fraud")
     box_step_weeks_fraud = px.box(df, x="isFraud", y="step_weeks", title="Step Weeks Distribution by Fraud")
 
-
     # --- Visualizations - Section 3 ---
     df['name_orig_initial'] = df['nameOrig'].str[0]
     df['name_dest_initial'] = df['nameDest'].str[0]
@@ -88,11 +87,10 @@ def load_and_explore_data():
                                               showscale=False
                                               )
 
-
     return df, summary_stats, missing_values, fraud_count, fraud_percentage, \
         hist_amount, box_amount_fraud, bar_type, \
         box_step_days_fraud, box_step_weeks_fraud, \
-        bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig, heatmap_fig
+        bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig, heatmap_fig, cat_corr_matrix, correlation_matrix
 
 # --- Data Preprocessing ---
 def preprocess_data(df):
@@ -113,7 +111,6 @@ def preprocess_data(df):
 
     df['name_orig_initial'] = df['nameOrig'].str[0].fillna('N/A')
     df['name_dest_initial'] = df['nameDest'].str[0].fillna('N/A')
-
 
     # --- Remove Outliers ---
     for col in ['amount', 'balanceDiffOrg', 'balanceDiffDest', 'amountRatioOrg', 'amountRatioDest']:
@@ -227,7 +224,8 @@ def main():
         st.header("Data Exploration - Transaction Data")
         df, summary_stats, missing_values, fraud_count, fraud_percentage, \
             hist_amount, box_amount_fraud, bar_type, \
-                _, _,_,_,_,_ ,_ = load_and_explore_data()
+             box_step_days_fraud, box_step_weeks_fraud, \
+             bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig, heatmap_fig, _, _ = load_and_explore_data()
 
         st.subheader("Data Summary")
         st.dataframe(summary_stats)
@@ -241,31 +239,81 @@ def main():
         st.plotly_chart(box_amount_fraud)
         st.plotly_chart(bar_type)
 
-
     elif phase == "Data Exploration Phase 2":
         st.header("Data Exploration - Time Features")
 
-        df, _, _, _, _, _, _, _, box_step_days_fraud, box_step_weeks_fraud, _,_,_,_ = load_and_explore_data()
+        df, summary_stats, missing_values, fraud_count, fraud_percentage, \
+            hist_amount, box_amount_fraud, bar_type, \
+            box_step_days_fraud, box_step_weeks_fraud, \
+            bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig, heatmap_fig, _, _ = load_and_explore_data()
 
         st.plotly_chart(box_step_days_fraud)
         st.plotly_chart(box_step_weeks_fraud)
 
-
     elif phase == "Data Exploration Phase 3":
-         st.header("Data Exploration - Name Initial and Categorical Correlations")
+        st.header("Data Exploration - Name Initial and Categorical Correlations")
 
-         df, _, _, _, _, _, _, _, _, _,bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig, heatmap_fig = load_and_explore_data()
+        df, summary_stats, missing_values, fraud_count, fraud_percentage, \
+            hist_amount, box_amount_fraud, bar_type, \
+            box_step_days_fraud, box_step_weeks_fraud, \
+            bar_name_orig_fraud, bar_name_dest_fraud, _, _, cat_corr_matrix, correlation_matrix = load_and_explore_data()
 
-         st.plotly_chart(bar_name_orig_fraud)
-         st.plotly_chart(bar_name_dest_fraud)
-         st.plotly_chart(cat_corr_heatmap_fig)
-         st.plotly_chart(heatmap_fig)
+        st.plotly_chart(bar_name_orig_fraud)
+        st.plotly_chart(bar_name_dest_fraud)
 
+        # --- Modified cat_corr_heatmap_fig ---
+        categorical_correlation_values = cat_corr_matrix.values
+        categorical_column_names = list(cat_corr_matrix.columns)
+        categorical_row_names = list(cat_corr_matrix.index)
 
+        # Create annotations 
+        annotations_cat_text = np.empty_like(categorical_correlation_values, dtype=str)
+        for i, row in enumerate(categorical_correlation_values):
+            for j, val in enumerate(row):
+                if abs(val) >= 0.5:  # Adjust this threshold as needed
+                    annotations_cat_text[i, j] = f'{val:.1f}'
+                else:
+                    annotations_cat_text[i, j] = ''
+
+        cat_corr_heatmap_fig = ff.create_annotated_heatmap(z=categorical_correlation_values,
+                                            x=categorical_column_names,
+                                            y=categorical_row_names,
+                                            colorscale='Viridis',
+                                            showscale=False,
+                                            annotation_text=annotations_cat_text
+                                            )
+        cat_corr_heatmap_fig.update_layout(width=800, height=800) # Increase heatmap size
+
+        st.plotly_chart(cat_corr_heatmap_fig)
+
+        # --- Modified heatmap_fig ---
+        numerical_correlation_values = correlation_matrix.values
+        numerical_column_names = list(correlation_matrix.columns)
+        numerical_row_names = list(correlation_matrix.index)
+
+        # Create annotations 
+        annotations_num_text = np.empty_like(numerical_correlation_values, dtype=str)
+        for i, row in enumerate(numerical_correlation_values):
+            for j, val in enumerate(row):
+                if abs(val) >= 0.5:  # Adjust this threshold as needed
+                    annotations_num_text[i, j] = f'{val:.1f}'
+                else:
+                    annotations_num_text[i, j] = ''
+
+        heatmap_fig = ff.create_annotated_heatmap(z=numerical_correlation_values,
+                                            x=numerical_column_names,
+                                            y=numerical_row_names,
+                                            colorscale='Viridis',
+                                            showscale=False,
+                                            annotation_text = annotations_num_text
+                                            )
+        heatmap_fig.update_layout(width=800, height=800) # Increase heatmap size
+
+        st.plotly_chart(heatmap_fig)
     elif phase == "Data Preprocessing":
 
         st.header("Data Preprocessing")
-        df, _, _, _, _, _, _, _, _, _ = load_and_explore_data()
+        df, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = load_and_explore_data()
         X_processed, y, preprocessor = preprocess_data(df)
         st.success("Data preprocessing completed!")
         st.write("Data Shape after Preprocessing:", X_processed.shape)
@@ -273,7 +321,7 @@ def main():
     elif phase == "Model Training and Evaluation":
         st.header("Model Training and Evaluation")
 
-        df, _, _, _, _, _, _, _, _, _ = load_and_explore_data()
+        df, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = load_and_explore_data()
         X_processed, y, preprocessor = preprocess_data(df)
 
         if st.button("Train Model"):
@@ -297,7 +345,7 @@ def main():
     elif phase == "Make Predictions":
         st.header("Make Predictions")
 
-        df, _, _, _, _, _, _, _, _, _ = load_and_explore_data()
+        df, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = load_and_explore_data()
         _, _, preprocessor = preprocess_data(df)
 
         # Define model and preprocessor paths
