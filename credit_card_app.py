@@ -71,18 +71,23 @@ def load_and_explore_data():
     cat_corr = df.select_dtypes(include='object').apply(lambda x: x.astype('category').cat.codes)
     cat_corr['isFraud'] = df['isFraud']
     cat_corr_matrix = cat_corr.corr()
+
     cat_corr_heatmap_fig = ff.create_annotated_heatmap(z=cat_corr_matrix.values,
                                               x=list(cat_corr_matrix.columns),
                                               y=list(cat_corr_matrix.index),
                                               colorscale='Viridis',
+                                              showscale=False
                                              )
 
     correlation_matrix = df.select_dtypes(include=np.number).corr()
+
     heatmap_fig = ff.create_annotated_heatmap(z=correlation_matrix.values,
                                               x=list(correlation_matrix.columns),
                                               y=list(correlation_matrix.index),
                                               colorscale='Viridis',
+                                              showscale=False
                                               )
+
 
     return df, summary_stats, missing_values, fraud_count, fraud_percentage, \
         hist_amount, box_amount_fraud, bar_type, \
@@ -211,17 +216,18 @@ def main():
     # --- Sidebar Menu ---
     st.sidebar.title("Project Phases")
     phase = st.sidebar.radio("Select Phase",
-                             ("Data Exploration",
+                             ("Data Exploration Phase 1",
+                              "Data Exploration Phase 2",
+                              "Data Exploration Phase 3",
                               "Data Preprocessing",
                               "Model Training and Evaluation",
                               "Make Predictions"))
 
-    if phase == "Data Exploration":
-        st.header("Data Exploration")
+    if phase == "Data Exploration Phase 1":
+        st.header("Data Exploration - Transaction Data")
         df, summary_stats, missing_values, fraud_count, fraud_percentage, \
-         hist_amount, box_amount_fraud, bar_type, \
-         box_step_days_fraud, box_step_weeks_fraud, \
-         bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig, heatmap_fig = load_and_explore_data()
+            hist_amount, box_amount_fraud, bar_type, \
+                _, _,_,_,_,_ ,_ = load_and_explore_data()
 
         st.subheader("Data Summary")
         st.dataframe(summary_stats)
@@ -231,23 +237,29 @@ def main():
         st.write(f"Fraud Count:\n{fraud_count}")
         st.write(f"Fraud Percentage:\n{fraud_percentage}")
 
-        # --- Section 1 ---
-        st.subheader("Visualizations - Transaction Data")
         st.plotly_chart(hist_amount)
         st.plotly_chart(box_amount_fraud)
         st.plotly_chart(bar_type)
 
-        # --- Section 2 ---
-        st.subheader("Visualizations - Time Features")
+
+    elif phase == "Data Exploration Phase 2":
+        st.header("Data Exploration - Time Features")
+
+        df, _, _, _, _, _, _, _, box_step_days_fraud, box_step_weeks_fraud, _,_,_,_ = load_and_explore_data()
+
         st.plotly_chart(box_step_days_fraud)
         st.plotly_chart(box_step_weeks_fraud)
 
-        # --- Section 3 ---
-        st.subheader("Visualizations - Name Initial and Categorical Correlations")
-        st.plotly_chart(bar_name_orig_fraud)
-        st.plotly_chart(bar_name_dest_fraud)
-        st.plotly_chart(cat_corr_heatmap_fig)
-        st.plotly_chart(heatmap_fig)
+
+    elif phase == "Data Exploration Phase 3":
+         st.header("Data Exploration - Name Initial and Categorical Correlations")
+
+         df, _, _, _, _, _, _, _, _, _,bar_name_orig_fraud, bar_name_dest_fraud, cat_corr_heatmap_fig, heatmap_fig = load_and_explore_data()
+
+         st.plotly_chart(bar_name_orig_fraud)
+         st.plotly_chart(bar_name_dest_fraud)
+         st.plotly_chart(cat_corr_heatmap_fig)
+         st.plotly_chart(heatmap_fig)
 
 
     elif phase == "Data Preprocessing":
@@ -267,7 +279,6 @@ def main():
         if st.button("Train Model"):
             with st.spinner('Training model...'):
                 model, X_test, y_test = train_model(X_processed, y, preprocessor)
-
                 # Feature Importance
                 feature_importance = pd.Series(model.feature_importances_, index = preprocessor.get_feature_names_out()).sort_values(ascending = False)
                 fig = px.bar(x = feature_importance.index, y = feature_importance, title = 'Feature Importance')
@@ -359,7 +370,6 @@ def main():
 
             except Exception as e:
                 st.error(f"An error occurred: {e}")
-
 
 if __name__ == "__main__":
     main()
