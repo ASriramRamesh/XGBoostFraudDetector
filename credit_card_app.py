@@ -14,6 +14,9 @@ import plotly.figure_factory as ff
 import os
 import joblib  # For saving and loading models and preprocessors
 
+from xgboost import XGBClassifier
+from sklearn.base import BaseEstimator, ClassifierMixin
+
 # --- Global Constants ---
 RANDOM_STATE = 42
 N_ITER = 10  # Number of random search iterations
@@ -23,6 +26,10 @@ MODEL_FILE = "trained_model.pkl"
 PREPROCESSOR_FOLDER = "preprocessors"
 PREPROCESSOR_FILE = "preprocessor.pkl"
 OUTLIER_THRESHOLD = 0.01  # Threshold for outlier removal
+
+class SklearnCompatibleXGBClassifier(XGBClassifier, BaseEstimator, ClassifierMixin):
+    def __sklearn_tags__(self):
+        return {"estimator_type": "classifier", "requires_positive_y": False}
 
 # --- Database Connection (Placeholder) ---
 # In a real-world scenario, replace with your actual database connection logic.
@@ -147,6 +154,10 @@ def train_model(X_processed, y, preprocessor):
     """Trains an XGBoost model with hyperparameter tuning using RandomizedSearchCV."""
     X_train, X_test, y_train, y_test = train_test_split(X_processed, y, test_size=0.2, stratify=y, random_state=RANDOM_STATE)
 
+    # Apply SMOTE to handle class imbalance
+    smote = SMOTE(random_state=RANDOM_STATE)
+    X_train_balanced, y_train_balanced = smote.fit_resample(X_train, y_train)
+
     # Define the hyperparameter grid for randomized search
     param_dist = {
         'max_depth': [3, 4, 5, 6, 7],
@@ -158,38 +169,53 @@ def train_model(X_processed, y, preprocessor):
         'gamma': [0, 0.1, 0.2, 0.3]
     }
 
-    # Initialize XGBoost Classifier
-    xgb_model = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=RANDOM_STATE)
+    # Initialize XGBoost Classifier with explicit enable_categorical=False
+    xgb_model = xgb.XGBClassifier(
+        eval_metric='logloss',
+        random_state=RANDOM_STATE,
+        enable_categorical=False,  # Explicitly disable categorical feature support
+        use_label_encoder=False   # Disable label encoder warning
+    )
 
-    # Setup RandomizedSearchCV
+    # # Use SklearnCompatibleXGBClassifier instead of XGBClassifier
+    # xgb_model = SklearnCompatibleXGBClassifier(
+    #     eval_metric='logloss',
+    #     random_state=RANDOM_STATE,
+    #     enable_categorical=False,
+    #     use_label_encoder=False
+    # )    
+
+    # Create custom StratifiedKFold object
+    cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+
+    # Setup RandomizedSearchCV with explicit cv parameter
     random_search = RandomizedSearchCV(
-        xgb_model,
+        estimator=xgb_model,
         param_distributions=param_dist,
         n_iter=N_ITER,
-        cv=StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE),
+        cv=cv,
         scoring='f1',
-        n_jobs=-1,  # Use all available cores
-        random_state=RANDOM_STATE
+        n_jobs=-1,
+        random_state=RANDOM_STATE,
+        error_score='raise'
     )
 
     # Fit the RandomizedSearchCV
-    random_search.fit(X_train, y_train)
+    random_search.fit(X_train_balanced, y_train_balanced)
 
     # Get the best model
     best_model = random_search.best_estimator_
 
-    # --- Save the model to the models folder ---
+    # Save the model and preprocessor
     if not os.path.exists(MODEL_FOLDER):
         os.makedirs(MODEL_FOLDER)
-
-    model_path = os.path.join(MODEL_FOLDER, MODEL_FILE)
-    joblib.dump(best_model, model_path)  # Save the model and the preprocessor to the same folder
-
-    # --- Save the preprocessor to the preprocessors folder ---
     if not os.path.exists(PREPROCESSOR_FOLDER):
         os.makedirs(PREPROCESSOR_FOLDER)
 
+    model_path = os.path.join(MODEL_FOLDER, MODEL_FILE)
     preprocessor_path = os.path.join(PREPROCESSOR_FOLDER, PREPROCESSOR_FILE)
+    
+    joblib.dump(best_model, model_path)
     joblib.dump(preprocessor, preprocessor_path)
 
     return best_model, X_test, y_test
